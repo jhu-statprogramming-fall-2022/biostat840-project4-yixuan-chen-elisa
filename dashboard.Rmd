@@ -1,0 +1,223 @@
+---
+title: "College Tuition"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(here)
+library(shiny)
+library(DT)
+```
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+current_wd <- getwd()
+if (file.exists("data")) {
+  setwd(file.path(current_wd, "data"))
+} else {
+  dir.create(file.path(current_wd, "data"))
+  setwd(file.path(current_wd, "data"))
+}
+
+if(!file.exists(here("data", "tuition_cost.RDS"))){
+  tuition_cost <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/tuition_cost.csv')
+  salary_potential <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/salary_potential.csv')
+  
+  saveRDS(tuition_cost, file = here("data","tuition_cost.RDS"))
+  saveRDS(salary_potential, file = here("data","salary_potential.RDS"))
+}
+
+tuition_cost = readRDS(here("data","tuition_cost.RDS"))
+salary_potential = readRDS(here("data","salary_potential.RDS"))
+```
+
+## Column {data-width="350"}
+
+# About
+
+**Purpose**: The purpose of this dashboard is to summarize the difference in tuition fees between school type across all states in the United States and analyze the relationship between tuition fees and early-career salaries for their graduates.
+
+**Source of data** This data combines two sub-datasets, salary_potential and tuition_cost, obtained from Tidyverse:<https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-03-10>
+
+Tuition_cost data set provides information about tuition and fees by college/unversity for 2018-2019 obtained from the Chronicle of Higher Education, and salary_potential data comes from payscale.com. Original data for tuition_cost:<https://www.chronicle.com/article/tuition-and-fees-1998-99-through-2018-19/> Original data for salary_potential:<https://www.payscale.com/college-salary-report/best-schools-by-state/bachelors/new-hampshire>
+
+**Video Summary** 
+[![IMAGE_ALT](https://youtu.be/0iWtB2RQFYg.jpg)](https://youtu.be/0iWtB2RQFYg)
+
+# The Data
+
+The data set provides information about tuition fees and early_career salary for different types of 4-year colleges across the United States.
+
+```{r,echo=FALSE}
+DT_table = inner_join(tuition_cost,salary_potential,
+                      by = c("name" = "name","state" = "state_name")) %>% 
+  drop_na() %>% filter(degree_length== "4 Year") %>%
+  select(c(name,state_code,type,in_state_tuition,out_of_state_tuition,
+                   early_career_pay)) %>%
+  within({
+    tuition.cat <- NA
+    tuition.cat[out_of_state_tuition < 10000] <- "less than 10000"
+    tuition.cat[out_of_state_tuition > 10000 & out_of_state_tuition < 20000]<- "10000-20000"
+    tuition.cat[out_of_state_tuition > 20000 & out_of_state_tuition < 30000]<- "20000-30000"
+    tuition.cat[out_of_state_tuition > 30000 & out_of_state_tuition < 40000]<- "30000-40000"
+    tuition.cat[out_of_state_tuition > 40000 & out_of_state_tuition < 50000]<- "40000-50000"
+    tuition.cat[out_of_state_tuition > 50000] <-"greater than 50000"
+    }) %>%
+  mutate(tuition.cat = factor(tuition.cat))
+```
+
+```{r, echo=FALSE}
+DT::renderDataTable({
+  DT::datatable(DT_table,
+                caption = htmltools::tags$caption(
+                  style = 'caption-side: top; text-align: Left;'))
+})
+```
+
+# Tuition
+
+## Column {.tabset}
+
+### Out-of-State Tuition across states
+
+Pennsylvania, Massachusetts, and California have the highest out-of-state costs.
+
+```{r}
+DT_table %>%
+  group_by(state_code) %>%
+  summarise(mean_out = round(mean(out_of_state_tuition), 3)) %>%
+  ggplot() +
+  geom_bar(aes(x = reorder(state_code, mean_out), y = mean_out), 
+           stat = "identity") +
+  labs(title = "Average Out-of-state Costs",
+       subtitle = "4-Year Colleges",
+       x = "State", 
+       y = "Average Out-of-state Costs",
+       fill = "In-state",
+       caption = "Rank from lowest average out-of-state costs to greatest") +
+  theme(axis.text.x = element_text(size = 6, angle = 70, hjust = 1))
+```
+
+### In-state Tuition across states
+
+Pennsylvania, Massachusetts, and California have the highest out-of-state costs.
+
+```{r}
+DT_table %>%
+  group_by(state_code) %>%
+  summarise(mean_in = round(mean(in_state_tuition), 3)) %>%
+  ggplot() +
+  geom_bar(aes(x = reorder(state_code, mean_in), y = mean_in), 
+           stat = "identity") +
+  labs(title = "Average in-state Costs",
+       subtitle = "4-Year Colleges",
+       x = "State", 
+       y = "Average in-state Costs",
+       fill = "In-state",
+       caption = "Rank from lowest average in-state costs to greatest") +
+  theme(axis.text.x = element_text(size = 6, angle = 70, hjust = 1))
+```
+
+# Early-Career Pay
+
+Pennsylvania, Massachusetts, and California have the highest early-career pay.
+
+```{r}
+DT_table %>%
+  group_by(state_code) %>%
+  summarise(avg = round(mean(early_career_pay), 3)) %>%
+  ggplot() +
+  geom_bar(aes(x = reorder(state_code, avg),y=avg), stat = "identity") +
+  labs(title = "Average early-career salary",
+       subtitle = "4-Year Colleges",
+       x = "State", 
+       y = "Average early-career salary",
+       caption = "Rank from lowest average pay to greatest") +
+  theme(axis.text.x = element_text(size = 6, angle = 70, hjust = 1))
+```
+
+# Out-of-state Tuition by School types
+
+## Column {.sidebar}
+
+```{r}
+selectInput("state_selected", 
+            label = "Select a state to explore:",
+            choices = DT_table %>% 
+              pull(state_code) %>% 
+              unique() %>%
+              sort(), selected = "MD")
+```
+
+## Column
+
+### Out_of_state Tuition
+
+```{r}
+renderPlot({DT_table %>%
+  filter(state_code == input$state_selected) %>%
+  group_by(type) %>%
+  ggplot(aes(x=type, y =out_of_state_tuition, fill = type)) + 
+  geom_boxplot() + facet_wrap(~type) +
+  labs(title="Out-of-state tuition by school type", 
+       subtitle = "4-year college",
+       x = "State", y="Out-of-state Costs", 
+       caption = "Summary statistics for selected state")
+})
+```
+
+# In-state Tuition by School types
+
+## Column {.sidebar}
+
+```{r}
+selectInput("state", 
+            label = "Select a state:",
+            choices = DT_table %>% 
+              pull(state_code) %>% 
+              unique() %>%
+              sort(), selected = "MD")
+```
+
+## Column
+
+### In_state Tuition
+
+```{r}
+renderPlot({DT_table %>%
+  filter(state_code == input$state) %>%
+  group_by(type) %>%
+  summarise(avg = mean(in_state_tuition)) %>%
+  ggplot(aes(x=type, y =avg, fill = type)) + 
+    geom_bar(stat = "identity") + 
+  labs(title="Average In-state tuition by school type", 
+       subtitle = "4-year college",
+       x = "State", y="In-state Costs", 
+       caption = "Average value for selected state")
+})
+```
+
+# Analysis
+
+### Tuition vs Early-career pay
+
+Colleges graduates from schools with higher out-of-state tuitions tend to have highest early-career pay.
+
+```{r}
+ggplot(DT_table, aes(x=tuition.cat, y =early_career_pay, fill = tuition.cat)) + 
+  geom_boxplot() + theme_minimal() + 
+  labs(title="Relationship between out-of-state tuition and early career pay", 
+       subtitle = "4-year college",
+       x = "Tuition", y="Dollars", 
+       caption = "Data source: TidyTuesday - College Tuition",
+       fill = "Tuition Categories") + 
+  scale_fill_discrete(labels=c("less than 10000", "10000-20000",
+     "20000-30000","30000-40000","40000-50000", "greater than 50000")) + 
+  theme(axis.text.x = element_text(angle = 15, vjust=0.8))
+```
